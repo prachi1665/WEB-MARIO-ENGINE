@@ -1,56 +1,113 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AAA Pixel Platformer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAA Runner Game</title>
 
-  <style>
-    body {
-      margin: 0;
-      background: linear-gradient(#0b1026, #000);
-      font-family: Arial;
-      overflow: hidden;
-      color: white;
-      text-align: center;
-    }
+<style>
+body {
+  margin:0;
+  overflow:hidden;
+  font-family:Arial;
+  background:#000;
+  color:white;
+  text-align:center;
+}
 
-    #hud {
-      padding: 10px;
-      font-size: 18px;
-    }
+/* HUD */
+#hud {
+  position:fixed;
+  top:0;
+  width:100%;
+  padding:8px;
+  font-size:16px;
+  z-index:10;
+}
 
-    canvas {
-      background: #111;
-      display: block;
-      margin: auto;
-      border: 2px solid #00e5ff;
-    }
+/* GAME */
+#game {
+  width:100%;
+  height:100vh;
+  position:relative;
+  overflow:hidden;
+}
 
-    #controls {
-      position: fixed;
-      bottom: 10px;
-      width: 100%;
-      text-align: center;
-    }
+/* PARALLAX LAYERS */
+.layer {
+  position:absolute;
+  width:200%;
+  height:100%;
+  top:0;
+  left:0;
+}
 
-    button {
-      font-size: 20px;
-      padding: 10px 15px;
-      margin: 5px;
-      border: none;
-      border-radius: 10px;
-      background: #00e5ff;
-    }
-  </style>
+#bg1 { background: linear-gradient(#0b1026,#000); z-index:0; }
+#bg2 { background: url('https://i.imgur.com/3ZQ3Z3l.png'); opacity:0.2; z-index:1; }
+#bg3 { background: url('https://i.imgur.com/8QfQ5QZ.png'); opacity:0.3; z-index:2; }
+
+/* PLAYER */
+#player {
+  position:absolute;
+  bottom:80px;
+  left:80px;
+  width:40px;
+  height:40px;
+  background:cyan;
+  border-radius:10px;
+  z-index:5;
+  box-shadow:0 0 15px cyan;
+}
+
+/* OBSTACLES */
+.obj {
+  position:absolute;
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  z-index:5;
+}
+
+.obstacle { background:red; }
+.coin { background:gold; }
+.animal { background:orange; }
+
+/* POWER UPS */
+.shield { background:deepskyblue; }
+.magnet { background:lime; }
+
+/* CONTROLS */
+#controls {
+  position:fixed;
+  bottom:10px;
+  width:100%;
+}
+
+button {
+  font-size:20px;
+  padding:10px 15px;
+  margin:5px;
+  border:none;
+  border-radius:10px;
+  background:#00e5ff;
+}
+</style>
 </head>
 
 <body>
 
 <div id="hud">
-  Score: <span id="score">0</span>
+Score: <span id="score">0</span> |
+Level: <span id="level">1</span> |
+Shield: <span id="shield">OFF</span>
 </div>
 
-<canvas id="game" width="320" height="480"></canvas>
+<div id="game">
+  <div id="bg1" class="layer"></div>
+  <div id="bg2" class="layer"></div>
+  <div id="bg3" class="layer"></div>
+
+  <div id="player"></div>
+</div>
 
 <div id="controls">
   <button onclick="left=true">⬅️</button>
@@ -59,149 +116,141 @@
 </div>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+let game = document.getElementById("game");
+let player = document.getElementById("player");
 
-let score = 0;
-let gravity = 0.4;
+let score=0, level=1;
+let speed=3;
+let gravity=0.6;
+let velY=0;
+let ground=80;
+let left=false, right=false;
+let isJumping=false;
 
-let left = false;
-let right = false;
+let shield=false;
+let magnet=false;
 
-let cameraX = 0;
+let objects=[];
+
+// SOUND ENGINE (no files needed)
+function beep(freq){
+  let ctx=new (window.AudioContext||window.webkitAudioContext)();
+  let osc=ctx.createOscillator();
+  osc.frequency.value=freq;
+  osc.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime+0.1);
+}
 
 // PLAYER
-let player = {
-  x: 50,
-  y: 300,
-  w: 20,
-  h: 20,
-  dy: 0,
-  onGround: false
-};
-
-// LEVEL
-let platforms = [
-  {x:0,y:420,w:2000,h:60},
-  {x:200,y:350,w:100,h:10},
-  {x:400,y:300,w:100,h:10},
-  {x:650,y:250,w:100,h:10}
-];
-
-let coins = [
-  {x:220,y:320,got:false},
-  {x:420,y:270,got:false},
-  {x:670,y:220,got:false}
-];
-
-let enemies = [
-  {x:500,y:400}
-];
-
-// CONTROLS
-document.addEventListener("keydown", e=>{
-  if(e.key==="ArrowLeft") left=true;
-  if(e.key==="ArrowRight") right=true;
-  if(e.key==="ArrowUp") jump();
-});
-
-document.addEventListener("keyup", e=>{
-  if(e.key==="ArrowLeft") left=false;
-  if(e.key==="ArrowRight") right=false;
-});
+let px=80, py=ground;
 
 // JUMP
 function jump(){
-  if(player.onGround){
-    player.dy = -8;
-    player.onGround = false;
+  if(!isJumping){
+    velY=10;
+    isJumping=true;
+    beep(300);
   }
 }
 
+// SPAWN OBJECTS
+function spawn(){
+  let types=["obstacle","coin","animal","shield","magnet"];
+  let type=types[Math.floor(Math.random()*types.length)];
+
+  let obj=document.createElement("div");
+  obj.className="obj "+type;
+  obj.dataset.type=type;
+  obj.style.left="100%";
+  obj.style.bottom=ground+"px";
+
+  game.appendChild(obj);
+  objects.push(obj);
+}
+setInterval(spawn,1200);
+
 // GAME LOOP
-function update(){
+function loop(){
 
   // movement
-  if(left) player.x -= 2;
-  if(right) player.x += 2;
+  if(left) px-=5;
+  if(right) px+=5;
 
   // gravity
-  player.dy += gravity;
-  player.y += player.dy;
+  velY-=gravity;
+  py+=velY;
 
-  player.onGround = false;
+  if(py<=ground){
+    py=ground;
+    velY=0;
+    isJumping=false;
+  }
 
-  // camera follow
-  cameraX = player.x - 100;
+  player.style.left=px+"px";
+  player.style.bottom=py+"px";
 
-  // platform collision
-  platforms.forEach(p=>{
-    if(
-      player.x < p.x+p.w &&
-      player.x+player.w > p.x &&
-      player.y < p.y+p.h &&
-      player.y+player.h > p.y
-    ){
-      player.y = p.y - player.h;
-      player.dy = 0;
-      player.onGround = true;
-    }
-  });
+  // parallax
+  document.getElementById("bg2").style.left = -score*1+"px";
+  document.getElementById("bg3").style.left = -score*2+"px";
 
-  // coins
-  coins.forEach(c=>{
-    if(!c.got &&
-      Math.abs(player.x-c.x)<15 &&
-      Math.abs(player.y-c.y)<15
-    ){
-      c.got = true;
+  // speed increase
+  speed += 0.002;
+
+  // move objects
+  objects.forEach((o,i)=>{
+    let x=parseFloat(o.style.left);
+    x-=speed;
+    o.style.left=x+"px";
+
+    // collision
+    if(x<px+30 && x>px-30 && py<=ground+30){
+
+      if(o.dataset.type==="coin"){
+        score++;
+        beep(600);
+      }
+
+      if(o.dataset.type==="shield"){
+        shield=true;
+        document.getElementById("shield").innerText="ON";
+        setTimeout(()=>{shield=false;document.getElementById("shield").innerText="OFF";},5000);
+      }
+
+      if(o.dataset.type==="magnet"){
+        magnet=true;
+        setTimeout(()=>magnet=false,5000);
+      }
+
+      if(o.dataset.type==="animal" || o.dataset.type==="obstacle"){
+        if(!shield){
+          alert("💥 Game Over Score: "+score);
+          location.reload();
+        }
+      }
+
+      o.remove();
+      objects.splice(i,1);
       score++;
-      document.getElementById("score").innerText = score;
+      document.getElementById("score").innerText=score;
+    }
+
+    if(x<-50){
+      o.remove();
+      objects.splice(i,1);
     }
   });
 
-  draw();
-  requestAnimationFrame(update);
+  // level system
+  if(score%10===0 && score>0){
+    level=Math.floor(score/10)+1;
+    document.getElementById("level").innerText=level;
+  }
+
+  requestAnimationFrame(loop);
 }
 
-// DRAW
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  ctx.save();
-  ctx.translate(-cameraX,0);
-
-  // player
-  ctx.fillStyle="cyan";
-  ctx.fillRect(player.x,player.y,player.w,player.h);
-
-  // platforms
-  ctx.fillStyle="white";
-  platforms.forEach(p=>{
-    ctx.fillRect(p.x,p.y,p.w,p.h);
-  });
-
-  // coins
-  ctx.fillStyle="gold";
-  coins.forEach(c=>{
-    if(!c.got){
-      ctx.beginPath();
-      ctx.arc(c.x,c.y,5,0,Math.PI*2);
-      ctx.fill();
-    }
-  });
-
-  // enemies
-  ctx.fillStyle="red";
-  enemies.forEach(e=>{
-    e.x += Math.sin(Date.now()/500)*0.3;
-    ctx.fillRect(e.x,e.y,20,20);
-  });
-
-  ctx.restore();
-}
-
-update();
+loop();
 </script>
 
 </body>
