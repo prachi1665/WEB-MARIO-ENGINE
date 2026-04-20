@@ -1,191 +1,183 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jungle Run Survival</title>
-
-<style>
-body {
-  margin: 0;
-  overflow: hidden;
-  font-family: Arial;
-  background: linear-gradient(#1a2a6c, #000);
-  color: white;
-  text-align: center;
-}
-
-/* GAME AREA */
-#game {
-  width: 100%;
-  height: 100vh;
-  position: relative;
-  overflow: hidden;
-}
-
-/* GROUND */
-#ground {
-  position: absolute;
-  bottom: 0;
-  width: 100%;
-  height: 60px;
-  background: #2b2b2b;
-}
-
-/* CHARACTER (REAL LOOK) */
-#player {
-  position: absolute;
-  bottom: 60px;
-  left: 80px;
-  font-size: 35px;
-  transition: transform 0.1s;
-}
-
-/* RUN ANIMATION */
-.run {
-  animation: runAnim 0.2s infinite alternate;
-}
-@keyframes runAnim {
-  from { transform: translateY(0px) rotate(-5deg); }
-  to { transform: translateY(-2px) rotate(5deg); }
-}
-
-/* OBJECTS */
-.obj {
-  position: absolute;
-  font-size: 25px;
-}
-
-/* HUD */
-#hud {
-  position: fixed;
-  top: 10px;
-  width: 100%;
-  font-size: 18px;
-}
-</style>
-</head>
-
-<body>
-
-<div id="hud">
-Score: <span id="score">0</span>
-</div>
-
-<div id="game">
-  <div id="player">🧍‍♂️</div>
-  <div id="ground"></div>
-</div>
-
-<script>
 let player = document.getElementById("player");
 let game = document.getElementById("game");
 
-let score = 0;
-let gravity = 0.6;
-let velY = 0;
-let ground = 60;
+let score=0, health=3, speed=3;
+let gravity=0.6, velY=0, ground=80;
 
-let px = 80;
-let py = ground;
-let isJumping = false;
+let px=80, py=ground;
+let isJumping=false;
+let running=true;
 
-let objects = [];
+let objects=[];
+let particles=[];
 
-// START RUN ANIMATION
-player.classList.add("run");
-
-// CONTROLS
-document.addEventListener("keydown", e=>{
-  if(e.key===" " || e.key==="ArrowUp") jump();
+// 🎮 JOYSTICK CONTROL (DRAG)
+document.addEventListener("touchmove", (e)=>{
+  let x = e.touches[0].clientX;
+  px = x - 40;
 });
 
-document.addEventListener("touchstart", jump);
-
-function jump(){
-  if(!isJumping){
-    velY = 12;
-    isJumping = true;
-  }
+// 🦶 RUN ANIMATION (SPRITE STYLE)
+let frame=0;
+function animatePlayer(){
+  frame++;
+  player.innerText = (frame%20<10) ? "🏃‍♂️" : "🏃";
 }
 
-// SPAWN OBJECTS
+// 🐺 ENEMY TYPES
 function spawn(){
-  let type = Math.random();
+  if(!running) return;
 
-  let obj = document.createElement("div");
-  obj.classList.add("obj");
+  let types=["coin","snake","wolf","bird","shield"];
+  let t=types[Math.floor(Math.random()*types.length)];
 
-  if(type < 0.5){
-    obj.innerText = "🪙"; // coin
-    obj.dataset.type = "coin";
-  }
-  else{
-    obj.innerText = "🐺"; // animal (danger)
-    obj.dataset.type = "animal";
-  }
+  let obj=document.createElement("div");
+  obj.className="obj";
 
-  obj.style.left = "100%";
-  obj.style.bottom = ground + "px";
+  if(t==="coin") obj.innerText="🪙";
+  if(t==="snake") obj.innerText="🐍";
+  if(t==="wolf") obj.innerText="🐺";
+  if(t==="bird") obj.innerText="🦅";
+  if(t==="shield") obj.innerText="🛡️";
+
+  obj.dataset.type=t;
+
+  obj.style.left="100%";
+  obj.style.bottom = (t==="bird") ? "150px" : ground+"px";
 
   game.appendChild(obj);
   objects.push(obj);
 }
+setInterval(spawn,900);
 
-setInterval(spawn, 1200);
+// 💥 PARTICLES
+function createParticles(x,y){
+  for(let i=0;i<6;i++){
+    let p=document.createElement("div");
+    p.className="obj";
+    p.innerText="✨";
+    p.style.left=x+"px";
+    p.style.bottom=y+"px";
+    game.appendChild(p);
+    particles.push({el:p,dx:Math.random()*4-2,dy:Math.random()*4});
+  }
+}
+
+// 👾 BOSS
+let boss=null;
+function spawnBoss(){
+  boss=document.createElement("div");
+  boss.innerText="👹";
+  boss.style.position="absolute";
+  boss.style.left="100%";
+  boss.style.bottom=ground+"px";
+  boss.style.fontSize="40px";
+  game.appendChild(boss);
+}
+setTimeout(spawnBoss,20000);
+
+// 🦘 JUMP
+function jump(){
+  if(!isJumping){
+    velY=12;
+    isJumping=true;
+  }
+}
+document.addEventListener("touchstart", jump);
+document.addEventListener("keydown", e=>{
+  if(e.key===" "||e.key==="ArrowUp") jump();
+});
 
 // GAME LOOP
 function loop(){
 
-  // GRAVITY
+  animatePlayer();
+
+  // gravity
   velY -= gravity;
   py += velY;
 
-  if(py <= ground){
-    py = ground;
-    velY = 0;
-    isJumping = false;
+  if(py<=ground){
+    py=ground;
+    velY=0;
+    isJumping=false;
   }
 
-  player.style.bottom = py + "px";
-  player.style.left = px + "px";
+  player.style.left=px+"px";
+  player.style.bottom=py+"px";
 
-  // OBJECT MOVEMENT
+  speed += 0.002;
+
+  // objects
   objects.forEach((o,i)=>{
-    let x = parseFloat(o.style.left);
-    x -= 5;
-    o.style.left = x + "px";
+    let x=parseFloat(o.style.left);
+    x-=speed;
+    o.style.left=x+"px";
 
-    // COLLISION AREA
-    if(
-      x < px + 30 &&
-      x > px - 30 &&
-      py <= ground + 30
-    ){
+    // collision
+    if(x<px+30 && x>px-30 && Math.abs(py-ground)<50){
 
-      if(o.dataset.type === "coin"){
+      if(o.dataset.type==="coin"){
         score++;
-        document.getElementById("score").innerText = score;
-        o.remove();
-        objects.splice(i,1);
+        createParticles(x,py);
+      }
+      else if(o.dataset.type==="shield"){
+        health++;
+      }
+      else{
+        health--;
       }
 
-      if(o.dataset.type === "animal"){
-        alert("💥 BITTEN BY ANIMAL! Score: " + score);
-        location.reload();
-      }
+      document.getElementById("score").innerText=score;
+      document.getElementById("health").innerText=health;
+
+      o.remove();
+      objects.splice(i,1);
     }
 
-    if(x < -50){
+    if(x<-50){
       o.remove();
       objects.splice(i,1);
     }
   });
 
+  // particles
+  particles.forEach((p,i)=>{
+    let x=parseFloat(p.el.style.left);
+    let y=parseFloat(p.el.style.bottom);
+
+    x+=p.dx;
+    y+=p.dy;
+    p.dy-=0.2;
+
+    p.el.style.left=x+"px";
+    p.el.style.bottom=y+"px";
+
+    if(y<0){
+      p.el.remove();
+      particles.splice(i,1);
+    }
+  });
+
+  // boss movement
+  if(boss){
+    let bx=parseFloat(boss.style.left);
+    bx-=speed+1;
+    boss.style.left=bx+"px";
+
+    if(bx<px+40){
+      health-=2;
+    }
+  }
+
+  // game over
+  if(health<=0){
+    alert("Game Over! Score: "+score);
+    location.reload();
+    return;
+  }
+
   requestAnimationFrame(loop);
 }
 
 loop();
-</script>
-
-</body>
-</html>
