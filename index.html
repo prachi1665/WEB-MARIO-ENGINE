@@ -2,91 +2,65 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AAA Jungle Runner</title>
+<title>Jungle Run Survival</title>
 
 <style>
 body {
-  margin:0;
-  overflow:hidden;
-  font-family:Arial;
-  background:#000;
-  color:white;
-  text-align:center;
+  margin: 0;
+  overflow: hidden;
+  font-family: Arial;
+  background: linear-gradient(#1a2a6c, #000);
+  color: white;
+  text-align: center;
 }
 
-/* GAME */
+/* GAME AREA */
 #game {
-  width:100%;
-  height:100vh;
-  position:relative;
-  overflow:hidden;
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
 }
 
-/* PARALLAX BACKGROUND */
-.layer {
-  position:absolute;
-  width:200%;
-  height:100%;
-  top:0;
-  left:0;
+/* GROUND */
+#ground {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 60px;
+  background: #2b2b2b;
 }
 
-#bg1 { background: linear-gradient(#0b3d2e,#000); z-index:0; }
-#bg2 { background: radial-gradient(circle, rgba(0,255,100,0.2), transparent); z-index:1; }
-#bg3 { background: url('https://i.imgur.com/3ZQ3Z3l.png'); opacity:0.2; z-index:2; }
-
-/* PLAYER */
+/* CHARACTER (REAL LOOK) */
 #player {
-  position:absolute;
-  bottom:80px;
-  left:80px;
-  font-size:40px;
-  z-index:5;
+  position: absolute;
+  bottom: 60px;
+  left: 80px;
+  font-size: 35px;
+  transition: transform 0.1s;
 }
 
 /* RUN ANIMATION */
 .run {
-  animation: run 0.15s infinite alternate;
+  animation: runAnim 0.2s infinite alternate;
 }
-@keyframes run {
-  0% { transform: translateY(0px) rotate(-5deg); }
-  100% { transform: translateY(-3px) rotate(5deg); }
+@keyframes runAnim {
+  from { transform: translateY(0px) rotate(-5deg); }
+  to { transform: translateY(-2px) rotate(5deg); }
 }
 
 /* OBJECTS */
 .obj {
-  position:absolute;
-  font-size:28px;
-  z-index:5;
-}
-
-/* SHIELD GLOW */
-.shield {
-  filter: drop-shadow(0 0 10px cyan);
+  position: absolute;
+  font-size: 25px;
 }
 
 /* HUD */
 #hud {
-  position:fixed;
-  top:10px;
-  width:100%;
-  font-size:16px;
-  z-index:10;
-}
-
-/* CONTROLS */
-#controls {
-  position:fixed;
-  bottom:10px;
-  width:100%;
-}
-
-button {
-  font-size:18px;
-  padding:10px 15px;
-  border:none;
-  border-radius:10px;
-  background:#00e5ff;
+  position: fixed;
+  top: 10px;
+  width: 100%;
+  font-size: 18px;
 }
 </style>
 </head>
@@ -94,142 +68,114 @@ button {
 <body>
 
 <div id="hud">
-Score: <span id="score">0</span> |
-Speed: <span id="speed">1</span> |
-Shield: <span id="shield">OFF</span>
+Score: <span id="score">0</span>
 </div>
 
 <div id="game">
-  <div id="bg1" class="layer"></div>
-  <div id="bg2" class="layer"></div>
-  <div id="bg3" class="layer"></div>
-
   <div id="player">🧍‍♂️</div>
-</div>
-
-<div id="controls">
-  <button onclick="jump()">⬆️ Jump</button>
+  <div id="ground"></div>
 </div>
 
 <script>
-let game = document.getElementById("game");
 let player = document.getElementById("player");
+let game = document.getElementById("game");
 
+let score = 0;
+let gravity = 0.6;
+let velY = 0;
+let ground = 60;
+
+let px = 80;
+let py = ground;
+let isJumping = false;
+
+let objects = [];
+
+// START RUN ANIMATION
 player.classList.add("run");
 
-let score=0;
-let speed=3;
+// CONTROLS
+document.addEventListener("keydown", e=>{
+  if(e.key===" " || e.key==="ArrowUp") jump();
+});
 
-let gravity=0.6;
-let velY=0;
-let ground=80;
+document.addEventListener("touchstart", jump);
 
-let px=80;
-let py=ground;
-
-let isJumping=false;
-let shield=false;
-
-let objects=[];
-
-// SOUND
-function beep(freq){
-  let ctx=new AudioContext();
-  let o=ctx.createOscillator();
-  o.frequency.value=freq;
-  o.connect(ctx.destination);
-  o.start();
-  o.stop(ctx.currentTime+0.1);
-}
-
-// JUMP
 function jump(){
   if(!isJumping){
-    velY=12;
-    isJumping=true;
-    beep(300);
+    velY = 12;
+    isJumping = true;
   }
 }
 
 // SPAWN OBJECTS
 function spawn(){
-  let types=["🐍","🐺","🪙","🦅","🛡️"];
-  let type=types[Math.floor(Math.random()*types.length)];
+  let type = Math.random();
 
-  let obj=document.createElement("div");
+  let obj = document.createElement("div");
   obj.classList.add("obj");
-  obj.innerText=type;
-  obj.dataset.type=type;
 
-  obj.style.left="100%";
-  obj.style.bottom=ground+"px";
+  if(type < 0.5){
+    obj.innerText = "🪙"; // coin
+    obj.dataset.type = "coin";
+  }
+  else{
+    obj.innerText = "🐺"; // animal (danger)
+    obj.dataset.type = "animal";
+  }
+
+  obj.style.left = "100%";
+  obj.style.bottom = ground + "px";
 
   game.appendChild(obj);
   objects.push(obj);
 }
 
-setInterval(spawn,1000);
+setInterval(spawn, 1200);
 
 // GAME LOOP
 function loop(){
 
-  // gravity
-  velY-=gravity;
-  py+=velY;
+  // GRAVITY
+  velY -= gravity;
+  py += velY;
 
-  if(py<=ground){
-    py=ground;
-    velY=0;
-    isJumping=false;
+  if(py <= ground){
+    py = ground;
+    velY = 0;
+    isJumping = false;
   }
 
-  player.style.bottom=py+"px";
-  player.style.left=px+"px";
+  player.style.bottom = py + "px";
+  player.style.left = px + "px";
 
-  // SPEED INCREASE
-  speed += 0.002;
-  document.getElementById("speed").innerText=Math.floor(speed);
-
-  // PARALLAX
-  document.getElementById("bg2").style.left=-score*2+"px";
-  document.getElementById("bg3").style.left=-score*3+"px";
-
-  // MOVE OBJECTS
+  // OBJECT MOVEMENT
   objects.forEach((o,i)=>{
-    let x=parseFloat(o.style.left);
-    x-=speed;
-    o.style.left=x+"px";
+    let x = parseFloat(o.style.left);
+    x -= 5;
+    o.style.left = x + "px";
 
-    // COLLISION
-    if(x<px+30 && x>px-30 && py<=ground+30){
+    // COLLISION AREA
+    if(
+      x < px + 30 &&
+      x > px - 30 &&
+      py <= ground + 30
+    ){
 
-      if(o.dataset.type==="🪙"){
+      if(o.dataset.type === "coin"){
         score++;
-        beep(600);
+        document.getElementById("score").innerText = score;
+        o.remove();
+        objects.splice(i,1);
       }
 
-      if(o.dataset.type==="🛡️"){
-        shield=true;
-        document.getElementById("shield").innerText="ON";
-        setTimeout(()=>{
-          shield=false;
-          document.getElementById("shield").innerText="OFF";
-        },5000);
+      if(o.dataset.type === "animal"){
+        alert("💥 BITTEN BY ANIMAL! Score: " + score);
+        location.reload();
       }
-
-      if(o.dataset.type==="🐍" || o.dataset.type==="🐺" || o.dataset.type==="🦅"){
-        if(!shield){
-          alert("💥 GAME OVER! Score: "+score);
-          location.reload();
-        }
-      }
-
-      o.remove();
-      objects.splice(i,1);
-      document.getElementById("score").innerText=score;
     }
 
-    if(x<-50){
+    if(x < -50){
       o.remove();
       objects.splice(i,1);
     }
